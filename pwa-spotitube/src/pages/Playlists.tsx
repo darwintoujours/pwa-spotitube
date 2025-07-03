@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
 import { usePlayer } from "../contexts/PlayerContext";
+import { useSpotifyToken } from "../contexts/SpotifyTokenContext"; // ajouté ici
 
 type Playlist = {
   id: string;
@@ -14,28 +14,18 @@ export default function Playlists() {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const { accessToken } = useSpotifyToken(); // ajouté ici
+
   useEffect(() => {
     const fetchPlaylists = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      let accessToken = session?.provider_token;
-
-      if (
-        !accessToken &&
-        session &&
-        session.user &&
-        Array.isArray(session.user.identities) &&
-        session.user.identities.length > 0 &&
-        session.user.identities[0].identity_data &&
-        session.user.identities[0].identity_data.access_token
-      ) {
-        accessToken = session.user.identities[0].identity_data.access_token;
+      if (!accessToken) { // ajouté ici
+        setLoading(false);
+        return;
       }
-
-      if (!accessToken) return;
 
       const res = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`, // ajouté ici
         },
       });
       if (res.ok) {
@@ -45,7 +35,7 @@ export default function Playlists() {
       setLoading(false);
     };
     fetchPlaylists();
-  }, []);
+  }, [accessToken]); // ajouté ici
 
   if (loading) {
     return <div style={{ textAlign: 'center', marginTop: 100 }}>Chargement des playlists...</div>;
@@ -54,6 +44,10 @@ export default function Playlists() {
   return (
     <div style={{ maxWidth: 700, margin: '60px auto', padding: 20 }}>
       <h2>Mes Playlists Spotify</h2>
+      {/* ajouté ici : debug token, optionnel */}
+      <div style={{ fontSize: 12, color: "#b3b3b3", marginBottom: 12 }}>
+        Token Spotify : {accessToken ? "✅ Présent" : "❌ Absent"}
+      </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24 }}>
         {playlists.map((pl) => (
           <Link

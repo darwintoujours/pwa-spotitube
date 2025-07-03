@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { supabase } from "../supabaseClient";
 import { usePlayer } from "../contexts/PlayerContext";
+import { useSpotifyToken } from "../contexts/SpotifyTokenContext"; // ajouté ici
 
 type Track = {
   id: string;
@@ -12,8 +12,8 @@ type Track = {
 
 export default function PlaylistDetail() {
   const { id } = useParams<{ id: string }>();
-  const [accessToken, setAccessToken] = useState<string | null>(null);
   const { setQueue } = usePlayer();
+  const { accessToken } = useSpotifyToken(); // ajouté ici
 
   const [playlistName, setPlaylistName] = useState("");
   const [playlistImage, setPlaylistImage] = useState<string | null>(null);
@@ -21,17 +21,7 @@ export default function PlaylistDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const getToken = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setAccessToken(session?.provider_token || null);
-      } catch (error) {
-        setAccessToken(null);
-      }
-    };
-    getToken();
-  }, []);
+  // supprimé : plus besoin de useState accessToken ni du useEffect pour getToken
 
   useEffect(() => {
     if (!accessToken || !id) {
@@ -43,7 +33,7 @@ export default function PlaylistDetail() {
     setError(null);
 
     fetch(`https://api.spotify.com/v1/playlists/${id}`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
+      headers: { Authorization: `Bearer ${accessToken}` } // ajouté ici (utilise le token du context)
     })
       .then(res => {
         if (!res.ok) throw new Error(`Erreur API Spotify : ${res.status} ${res.statusText}`);
@@ -59,7 +49,7 @@ export default function PlaylistDetail() {
         setError(err.message || "Erreur lors de la récupération de la playlist.");
         setLoading(false);
       });
-  }, [accessToken, id]);
+  }, [accessToken, id]); // ajouté ici : dépendance sur accessToken
 
   // Lance la playlist entière dans le player global
   const handlePlayAll = () => {
@@ -68,7 +58,7 @@ export default function PlaylistDetail() {
       title: track.name,
       artist: track.artists.map(a => a.name).join(", "),
       albumArt: track.album.images?.[0]?.url,
-      source: "spotify" as const // <--- TypeScript attend "spotify" | "youtube"
+      source: "spotify" as const
     }));
     setQueue(formattedTracks, 0);
   };
@@ -90,6 +80,11 @@ export default function PlaylistDetail() {
 
   return (
     <div style={{ maxWidth: 700, margin: "40px auto" }}>
+      <h2>Playlist Spotify</h2>
+      {/* ajouté ici : debug token (optionnel) */}
+      <div style={{ fontSize: 12, color: "#b3b3b3", marginBottom: 12 }}>
+        Token Spotify : {accessToken ? "✅ Présent" : "❌ Absent"}
+      </div>
       <div style={{ display: "flex", alignItems: "center", gap: 24, marginBottom: 32 }}>
         {playlistImage && (
           <img src={playlistImage} alt={playlistName} style={{ width: 80, height: 80, borderRadius: 12, objectFit: "cover" }} />

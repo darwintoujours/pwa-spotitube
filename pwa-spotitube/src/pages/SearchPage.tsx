@@ -1,7 +1,9 @@
 import React, { useState } from "react";
-import { usePlayer } from "../contexts/PlayerContext";
-import { searchSpotify } from "../services/spotifyApi";
 import { useSpotifyToken } from "../contexts/SpotifyTokenContext";
+import { searchSpotify } from "../services/spotifyApi";
+import { searchYouTube } from "../services/youtubeApi";
+import YouTubePlayer from "../components/YouTubePlayer";
+import SearchBar from "../components/SearchBar";
 
 type Artist = { name: string; id: string; url: string };
 type Album = { name: string; id: string; url: string };
@@ -11,8 +13,8 @@ type Track = {
   artists: Artist[];
   album: Album;
   albumArt: string;
-  source: "spotify" | "youtube";
-  sourceid?: string;
+  source: "spotify";
+  spotifyUrl?: string;
 };
 
 function removeDuplicates(tracks: Track[]): Track[] {
@@ -26,54 +28,51 @@ function removeDuplicates(tracks: Track[]): Track[] {
 }
 
 export default function SearchPage() {
-  const { setQueue } = usePlayer();
   const { accessToken } = useSpotifyToken();
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
+  const [youtubeVideoId, setYoutubeVideoId] = useState<string | null>(null);
+  const [isLoadingYoutube, setIsLoadingYoutube] = useState(false);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSearch = async (query: string) => {
     setLoading(true);
     setError(null);
     setTracks([]);
+    setSelectedTrack(null);
+    setYoutubeVideoId(null);
     try {
-      const form = e.currentTarget as HTMLFormElement;
-      const input = form.elements.namedItem("search") as HTMLInputElement;
-      const query = input.value;
       if (!accessToken) throw new Error("Token Spotify manquant ou expiré.");
-      const { tracks } = await searchSpotify(query, accessToken);
-      setTracks(removeDuplicates(tracks));
+      const spotifyResults = await searchSpotify(query, accessToken);
+      setTracks(removeDuplicates(spotifyResults.tracks));
     } catch (err: any) {
       setError(err.message || "Erreur lors de la recherche.");
     }
     setLoading(false);
   };
 
-  const handlePlay = (track: Track) => {
-    // Transforme le track pour correspondre au type PlayerContext.Track
-    setQueue([{
-      ...track,
-      artist: track.artists.map(a => a.name).join(", ")
-    }]);
+  const handlePlay = async (track: Track) => {
+    setSelectedTrack(track);
+    setIsLoadingYoutube(true);
+    setYoutubeVideoId(null);
+    // Recherche YouTube pour ce morceau
+    const ytResults = await searchYouTube(
+      `${track.artists.map(a => a.name).join(" ")} ${track.title} official audio`
+    );
+    setIsLoadingYoutube(false);
+    if (ytResults.length > 0) {
+      setYoutubeVideoId(ytResults[0].youtubeId);
+    } else {
+      setYoutubeVideoId(null);
+      alert("Aucune vidéo YouTube trouvée pour ce morceau.");
+    }
   };
 
   return (
     <div style={{ maxWidth: 800, margin: "40px auto" }}>
       <h2>Recherche musicale</h2>
-      <form onSubmit={handleSearch} style={{ display: "flex", gap: 12, marginBottom: 24 }}>
-        <input
-          name="search"
-          type="text"
-          placeholder="Titre, artiste, album…"
-          style={{ flex: 1, padding: 12, borderRadius: 8, border: "1px solid #ccc" }}
-        />
-        <button type="submit" style={{
-          background: "#1DB954", color: "#fff", border: "none", borderRadius: 8, padding: "0 20px", fontWeight: 600
-        }}>
-          Chercher
-        </button>
-      </form>
+      <SearchBar onSearch={handleSearch} />
       {loading && <div>Chargement…</div>}
       {error && <div style={{ color: "red", marginBottom: 16 }}>{error}</div>}
       <ul style={{ listStyle: "none", padding: 0 }}>
@@ -82,8 +81,9 @@ export default function SearchPage() {
             key={track.id}
             style={{
               background: "#191414", color: "#fff", borderRadius: 8, padding: 16, marginBottom: 10,
-              display: "flex", alignItems: "center", gap: 16
+              display: "flex", alignItems: "center", gap: 16, cursor: "pointer"
             }}
+            onClick={() => handlePlay(track)}
           >
             {track.albumArt && (
               <img src={track.albumArt} alt={track.title} style={{ width: 56, height: 56, borderRadius: 8, objectFit: "cover" }} />
@@ -112,7 +112,7 @@ export default function SearchPage() {
               </div>
             </div>
             <button
-              onClick={() => handlePlay(track)}
+              onClick={e => { e.stopPropagation(); handlePlay(track); }}
               style={{
                 background: "#FF0000", color: "#fff", border: "none", borderRadius: 16,
                 padding: "8px 16px", fontWeight: 600, marginLeft: 8, cursor: "pointer"
@@ -123,6 +123,16 @@ export default function SearchPage() {
           </li>
         ))}
       </ul>
+      {isLoadingYoutube && (
+        <div style={{ textAlign: "center", margin: "20px 0", color: "#1DB954" }}>
+          Chargement de la vidéo YouTube...
+        </div>
+      )}
+      {youtubeVideoId && !isLoadingYoutube && (
+        <div style={{ textAlign: "center", margin: "20px 0" }}>
+          <YouTubePlayer videoId={youtubeVideoId} />
+        </div>
+      )}
     </div>
   );
 }

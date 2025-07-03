@@ -65,6 +65,7 @@ export default function PlaylistUserDetail() {
         setYoutubeId(currentTrack.sourceid);
         setIsLoadingYoutube(false);
       } else {
+        // Recherche YouTube à la volée pour les morceaux Spotify
         const ytResults = await searchYouTube(
           `${currentTrack.artist} ${currentTrack.title} official audio`
         );

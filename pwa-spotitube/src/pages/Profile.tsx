@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { supabase }  from "../supabaseClient"; // On lit la session Supabase ici
-import { usePlayer } from "../contexts/PlayerContext";
+import { useSpotifyToken } from "../contexts/SpotifyTokenContext"; // ajouté ici
 
 type SpotifyProfile = {
   display_name: string;
@@ -12,17 +11,10 @@ type SpotifyProfile = {
 
 export default function Profile() {
   const { user, signOut } = useAuth();
-  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const { accessToken } = useSpotifyToken(); // ajouté ici
   const [profile, setProfile] = useState<SpotifyProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setAccessToken(session?.provider_token ?? null);
-    })();
-  }, []);
 
   useEffect(() => {
     if (!accessToken) {
@@ -52,6 +44,10 @@ export default function Profile() {
   return (
     <div style={{ maxWidth: 500, margin: "40px auto", textAlign: "center" }}>
       <h2>Mon profil Spotify</h2>
+      {/* Affichage debug du token, optionnel */}
+      <div style={{ fontSize: 12, color: "#b3b3b3", marginBottom: 12 }}>
+        Token Spotify : {accessToken ? "✅ Présent" : "❌ Absent"}
+      </div>
       {loading && <div style={{ marginTop: 100 }}>Chargement du profil Spotify…</div>}
       {error && <div style={{ color: "red", marginTop: 100 }}>{error}</div>}
       {profile && !loading && !error && (

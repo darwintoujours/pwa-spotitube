@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { useSpotifyToken } from "../contexts/SpotifyTokenContext"; // ajouté ici
 
 const SPOTIFY_ICON = (
   <svg width={20} height={20} viewBox="0 0 168 168">
@@ -16,6 +17,9 @@ export default function Login() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+
+  // Pour afficher l'état du token Spotify si besoin (debug)
+  const { accessToken } = useSpotifyToken(); // ajouté ici
 
   useEffect(() => {
     let isMounted = true;
@@ -59,6 +63,8 @@ export default function Login() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUser(null);
+    // ajouté ici : on peut forcer un reload pour nettoyer le contexte si besoin
+    window.location.reload(); // ajouté ici
   };
 
   if (loading) return <div style={{ marginTop: 100, textAlign: "center" }}>Chargement...</div>;
@@ -66,6 +72,10 @@ export default function Login() {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: 120 }}>
       <h2>Connexion Spotitube</h2>
+      {/* ajouté ici : affichage debug du token Spotify */}
+      <div style={{ fontSize: 12, color: "#b3b3b3", marginBottom: 12 }}>
+        Token Spotify : {accessToken ? "✅ Présent" : "❌ Absent"}
+      </div>
       {!user ? (
         <button
           onClick={handleLogin}

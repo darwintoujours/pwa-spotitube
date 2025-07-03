@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { supabase } from "../supabaseClient";
+import { useSpotifyToken } from "../contexts/SpotifyTokenContext"; // adapté ici
 
 type Playlist = {
   id: string;
@@ -9,22 +9,10 @@ type Playlist = {
 };
 
 export default function UserPlaylists() {
-  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const { accessToken } = useSpotifyToken(); // adapté ici
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const getToken = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setAccessToken(session?.provider_token || null);
-      } catch (error) {
-        setAccessToken(null);
-      }
-    };
-    getToken();
-  }, []);
 
   useEffect(() => {
     if (!accessToken) {
@@ -36,7 +24,7 @@ export default function UserPlaylists() {
     setError(null);
 
     fetch("https://api.spotify.com/v1/me/playlists?limit=50", {
-      headers: { Authorization: `Bearer ${accessToken}` }
+      headers: { Authorization: `Bearer ${accessToken}` } // adapté ici
     })
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status} – ${res.statusText}`);
@@ -51,7 +39,7 @@ export default function UserPlaylists() {
         setPlaylists([]);
         setLoading(false);
       });
-  }, [accessToken]);
+  }, [accessToken]); // adapté ici
 
   if (loading) return <div>Chargement...</div>;
   if (error) return <div style={{ color: "red" }}>{error}</div>;
@@ -59,6 +47,10 @@ export default function UserPlaylists() {
   return (
     <div style={{ maxWidth: 600, margin: "40px auto" }}>
       <h2>Mes Playlists Spotify</h2>
+      {/* Optionnel : debug token */}
+      <div style={{ fontSize: 12, color: "#b3b3b3", marginBottom: 12 }}>
+        Token Spotify : {accessToken ? "✅ Présent" : "❌ Absent"}
+      </div>
       <ul style={{ listStyle: "none", padding: 0 }}>
         {playlists.map(pl => (
           <li

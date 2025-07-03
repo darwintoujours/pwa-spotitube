@@ -1,21 +1,23 @@
 import React from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { useEnsureSpotifyToken } from "../hooks/useEnsureSpotifyToken"; // Si tu utilises ce hook
+import { useEnsureSpotifyTokens } from "../hooks/useEnsureSpotifyToken";
 
 export default function ProtectedRoute() {
-  useEnsureSpotifyToken();
-  const { user, loading } = useAuth();
+  // Récupère l’utilisateur Supabase (null si non connecté)
+  const { user } = useAuth();
+
+  // Assure que le token Spotify est toujours valide et rafraîchi si nécessaire
+  useEnsureSpotifyTokens();
+
+  // Mémoire de la route demandée pour redirection après login éventuel
   const location = useLocation();
 
-  // (Optionnel) S'assure que le token Spotify est valide sur toutes les pages protégées
-  useEnsureSpotifyToken?.();
+  // Si l’utilisateur n’est pas connecté, redirection vers /login
+  if (!user) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
 
-  if (loading) return <div>Chargement...</div>;
-
-  // Si pas connecté, redirige vers /login
-  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
-
-  // Sinon, affiche la page protégée
+  // Sinon, affiche les routes enfants
   return <Outlet />;
 }
