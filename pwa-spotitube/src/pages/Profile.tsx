@@ -1,24 +1,36 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
-import { useSpotifyToken } from "../contexts/SpotifyTokenContext";
+import { supabase }  from "../supabaseClient"; // On lit la session Supabase ici
 import { usePlayer } from "../contexts/PlayerContext";
+
+type SpotifyProfile = {
+  display_name: string;
+  email: string;
+  images?: { url: string }[];
+  external_urls?: { spotify: string };
+};
 
 export default function Profile() {
   const { user, signOut } = useAuth();
-  const accessToken = useSpotifyToken();
-  const [profile, setProfile] = useState<any>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [profile, setProfile] = useState<SpotifyProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
 
-  // Récupère le profil Spotify de l'utilisateur connecté
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setAccessToken(session?.provider_token ?? null);
+    })();
+  }, []);
+
   useEffect(() => {
     if (!accessToken) {
       setLoading(false);
       setError("Impossible de récupérer le token Spotify. Veuillez vous reconnecter.");
       return;
     }
+    setLoading(true);
     fetch("https://api.spotify.com/v1/me", {
       headers: { Authorization: `Bearer ${accessToken}` }
     })
@@ -36,38 +48,37 @@ export default function Profile() {
       });
   }, [accessToken]);
 
-  const handleLogout = async () => {
-    await signOut();
-    navigate("/login", { replace: true });
-  };
-
-  if (loading) return <div style={{ marginTop: 100, textAlign: "center" }}>Chargement du profil Spotify…</div>;
-  if (error) return <div style={{ color: "red", marginTop: 100, textAlign: "center" }}>{error}</div>;
-
+  // Le bouton déconnexion est TOUJOURS affiché (même en cas d’erreur)
   return (
     <div style={{ maxWidth: 500, margin: "40px auto", textAlign: "center" }}>
       <h2>Mon profil Spotify</h2>
-      {profile?.images?.[0]?.url && (
-        <img
-          src={profile.images[0].url}
-          alt="avatar"
-          style={{ width: 120, borderRadius: "50%", marginBottom: 24 }}
-        />
+      {loading && <div style={{ marginTop: 100 }}>Chargement du profil Spotify…</div>}
+      {error && <div style={{ color: "red", marginTop: 100 }}>{error}</div>}
+      {profile && !loading && !error && (
+        <>
+          {profile.images?.[0]?.url && (
+            <img
+              src={profile.images[0].url}
+              alt="avatar"
+              style={{ width: 120, borderRadius: "50%", marginBottom: 24 }}
+            />
+          )}
+          <h3 style={{ margin: "16px 0 8px 0" }}>{profile.display_name || "Utilisateur"}</h3>
+          <p style={{ color: "#b3b3b3" }}>{profile.email}</p>
+          <p>
+            <a
+              href={profile.external_urls?.spotify}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#1DB954", textDecoration: "underline" }}
+            >
+              Voir mon profil Spotify
+            </a>
+          </p>
+        </>
       )}
-      <h3 style={{ margin: "16px 0 8px 0" }}>{profile?.display_name || "Utilisateur"}</h3>
-      <p style={{ color: "#b3b3b3" }}>{profile?.email}</p>
-      <p>
-        <a
-          href={profile?.external_urls?.spotify}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: "#1DB954", textDecoration: "underline" }}
-        >
-          Voir mon profil Spotify
-        </a>
-      </p>
       <button
-        onClick={handleLogout}
+        onClick={signOut}
         style={{
           background: "#222",
           color: "#fff",

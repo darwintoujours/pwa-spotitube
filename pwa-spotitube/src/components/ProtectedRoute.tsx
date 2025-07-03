@@ -4,6 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useEnsureSpotifyToken } from "../hooks/useEnsureSpotifyToken"; // Si tu utilises ce hook
 
 export default function ProtectedRoute() {
+  useEnsureSpotifyToken();
   const { user, loading } = useAuth();
   const location = useLocation();
 

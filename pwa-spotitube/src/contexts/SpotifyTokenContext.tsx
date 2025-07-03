@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, ReactNode } from "react";
 
 type SpotifyTokenContextType = {
   accessToken: string | null;
@@ -7,7 +7,7 @@ type SpotifyTokenContextType = {
 
 const SpotifyTokenContext = createContext<SpotifyTokenContextType | undefined>(undefined);
 
-export function SpotifyTokenProvider({ children }: { children: React.ReactNode }) {
+export const SpotifyTokenProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
   return (
@@ -15,7 +15,7 @@ export function SpotifyTokenProvider({ children }: { children: React.ReactNode }
       {children}
     </SpotifyTokenContext.Provider>
   );
-}
+};
 
 export function useSpotifyToken() {
   const ctx = useContext(SpotifyTokenContext);

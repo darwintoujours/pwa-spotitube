@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
-import { refreshSpotifyToken } from "../services/spotifyTokenService";
 import { useSpotifyToken } from "../contexts/SpotifyTokenContext";
+import { refreshSpotifyToken } from "../services/spotifyTokenService";
 
-// Durée de validité du token Spotify (en secondes). Par défaut, 3600s (1h)
-const SPOTIFY_TOKEN_LIFETIME = 3600;
-
+/**
+ * Hook global pour garantir un access_token Spotify valide.
+ * - Rafraîchit automatiquement le token via le backend si besoin.
+ * - Met à jour le context global.
+ */
 export function useEnsureSpotifyToken() {
   const { setAccessToken } = useSpotifyToken();
   const refreshTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -14,44 +16,70 @@ export function useEnsureSpotifyToken() {
     let cancelled = false;
 
     async function checkAndRefresh() {
+      // 1. Récupère la session Supabase
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         setAccessToken(null);
         return;
       }
 
-      let access_token = session.provider_token;
-      const refresh_token = session.provider_refresh_token;
+      let accessToken = session.provider_token;
+      const refreshToken = session.provider_refresh_token;
+      const expiresAt = session.expires_at || null; // Unix timestamp (en secondes) si dispo
 
-      if (!access_token || !refresh_token) {
+      if (!accessToken || !refreshToken) {
         setAccessToken(null);
         return;
       }
 
-      setAccessToken(access_token);
+      // 2. Vérifie l'expiration (si expiresAt est dispo)
+      let needRefresh = false;
+      if (expiresAt) {
+        const now = Math.floor(Date.now() / 1000);
+        // On rafraîchit si le token expire dans moins d'1 minute
+        if (expiresAt - now < 60) {
+          needRefresh = true;
+        }
+      }
 
-      // Planifie le refresh automatique juste avant expiration (dans 59 minutes)
-      if (refreshTimeout.current) clearTimeout(refreshTimeout.current);
-      refreshTimeout.current = setTimeout(async () => {
+      if (needRefresh) {
         try {
-          const newToken = await refreshSpotifyToken(refresh_token);
-          setAccessToken(newToken);
-          // Planifie le prochain refresh dans 1h
-          if (!cancelled && newToken) {
-            refreshTimeout.current = setTimeout(checkAndRefresh, SPOTIFY_TOKEN_LIFETIME * 1000 - 60 * 1000);
+          const data = await refreshSpotifyToken(refreshToken);
+          accessToken = data.access_token;
+          setAccessToken(accessToken);
+
+          // Programme un prochain refresh automatique avant expiration
+          if (data.expires_in) {
+            if (refreshTimeout.current) clearTimeout(refreshTimeout.current);
+            refreshTimeout.current = setTimeout(
+              checkAndRefresh,
+              (data.expires_in - 60) * 1000 // 1 min avant expiration
+            );
           }
         } catch (e) {
           setAccessToken(null);
+          return;
         }
-      }, SPOTIFY_TOKEN_LIFETIME * 1000 - 60 * 1000); // 59 minutes
+      } else {
+        setAccessToken(accessToken);
 
+        // Programme un refresh automatique si expiresAt est connu
+        if (expiresAt) {
+          const now = Math.floor(Date.now() / 1000);
+          const delay = (expiresAt - now - 60) * 1000; // 1 min avant expiration
+          if (delay > 0) {
+            if (refreshTimeout.current) clearTimeout(refreshTimeout.current);
+            refreshTimeout.current = setTimeout(checkAndRefresh, delay);
+          }
+        }
+      }
     }
 
     checkAndRefresh();
 
     return () => {
-      cancelled = true;
       if (refreshTimeout.current) clearTimeout(refreshTimeout.current);
+      cancelled = true;
     };
   }, [setAccessToken]);
 }

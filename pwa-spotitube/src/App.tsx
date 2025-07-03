@@ -8,6 +8,8 @@ import PlaylistDetail from "./pages/PlaylistDetail";
 import ProtectedRoute from "./components/ProtectedRoute";
 import BottomPlayer from "./components/BottomPlayer";
 import Profile from "./pages/Profile";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 export default function App() {
   return (
@@ -38,6 +40,19 @@ export default function App() {
         {/* 404 */}
         <Route path="*" element={<div style={{ padding: 40, textAlign: "center" }}>Page non trouvée</div>} />
       </Routes>
+
+      {/* Notifications globales */}
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        pauseOnHover
+        draggable
+        pauseOnFocusLoss
+        theme="dark"
+      />
 
       {/* Player global, toujours visible en bas */}
       <BottomPlayer />
