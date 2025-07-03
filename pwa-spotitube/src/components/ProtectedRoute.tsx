@@ -7,17 +7,17 @@ export default function ProtectedRoute() {
   // Récupère l’utilisateur Supabase (null si non connecté)
   const { user } = useAuth();
 
-  // Assure que le token Spotify est toujours valide et rafraîchi si nécessaire
+  // Lance la logique de refresh automatique du token Spotify à chaque affichage de route protégée
   useEnsureSpotifyToken();
 
-  // Mémoire de la route demandée pour redirection après login éventuel
+  // Garde la route demandée pour rediriger après login si besoin
   const location = useLocation();
 
-  // Si l’utilisateur n’est pas connecté, redirection vers /login
+  // Si l’utilisateur n’est pas connecté, redirige vers /login
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  // Sinon, affiche les routes enfants
+  // Si connecté, affiche les routes enfants
   return <Outlet />;
 }

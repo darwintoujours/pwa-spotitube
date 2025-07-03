@@ -11,53 +11,70 @@ export default function Login() {
 
   useEffect(() => {
     let isMounted = true;
-    supabase.auth.getUser().then(({ data }) => {
+
+    // Log direct après getUser
+    supabase.auth.getUser().then(({ data, error }) => {
+      console.log("getUser() →", { data, error }); // ajouté ici
       if (isMounted) {
         setUser(data.user);
         setLoading(false);
         if (data.user) navigate("/", { replace: true });
       }
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (isMounted) {
-        setUser(session?.user ?? null);
-        // LOG SESSION COMPLET
-        console.log("SESSION SUPABASE :", session);
-        if (session?.user) navigate("/", { replace: true });
+
+    // Log direct après getSession
+    supabase.auth.getSession().then(({ data, error }) => {
+      console.log("getSession() →", { data, error }); // ajouté ici
+      if (data?.session) {
+        console.log("provider_token:", data.session.provider_token); // ajouté ici
+        console.log("provider_refresh_token:", data.session.provider_refresh_token); // ajouté ici
       }
     });
+
+    // Log à chaque changement d'état d'auth
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("onAuthStateChange →", { event, session }); // ajouté ici
+      if (isMounted) {
+        setUser(session?.user ?? null);
+        if (session?.user) navigate("/", { replace: true });
+      }
+      if (session) {
+        console.log("provider_token:", session.provider_token); // ajouté ici
+        console.log("provider_refresh_token:", session.provider_refresh_token); // ajouté ici
+      }
+    });
+
     return () => {
       isMounted = false;
       listener.subscription.unsubscribe();
     };
   }, [navigate]);
 
-  // src/pages/Login.tsx
-const handleLogin = async () => {
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "spotify",
-    options: {
-      redirectTo: window.location.origin,  // ou ta route callback spécifique
-      scopes: [
-        "user-read-email",
-        "user-read-private",
-        "playlist-read-private",
-        "playlist-modify-private",
-        "playlist-modify-public",
-        "user-top-read",
-        "user-read-recently-played",
-      ].join(" "),
-    },
-  });
-  
-  if (error) {
-    console.error("Erreur OAuth :", error);
-    return;
-  }
-  // ajouté ici : on redirige vers l’URL d’auth fournie par Supabase
-  window.location.href = data.url;
-};
+  const handleLogin = async () => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "spotify",
+      options: {
+        redirectTo: window.location.origin,
+        scopes: [
+          "user-read-email",
+          "user-read-private",
+          "playlist-read-private",
+          "playlist-modify-private",
+          "playlist-modify-public",
+          "user-top-read",
+          "user-read-recently-played",
+        ].join(" "),
+      },
+    });
 
+    console.log("signInWithOAuth →", { data, error }); // ajouté ici
+
+    if (error) {
+      console.error("Erreur OAuth :", error);
+      return;
+    }
+    window.location.href = data.url;
+  };
 
   if (loading) return <div style={{ marginTop: 100, textAlign: "center" }}>Chargement...</div>;
 
