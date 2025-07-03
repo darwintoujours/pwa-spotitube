@@ -12,7 +12,7 @@ export async function refreshSpotifyToken(refreshToken: string): Promise<{
   refresh_token?: string;
 }> {
   // Remplace l'URL ci-dessous par celle donnée par ngrok ou ton backend déployé
-  const BACKEND_URL = "golden-gratefully-squirrel.ngrok-free.app/refresh";
+  const BACKEND_URL = "amazing-supposedly-caribou.ngrok-free.app/refresh";
 
   const response = await fetch(BACKEND_URL, {
     method: "POST",

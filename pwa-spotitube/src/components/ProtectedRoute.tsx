@@ -1,14 +1,14 @@
 import React from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { useEnsureSpotifyTokens } from "../hooks/useEnsureSpotifyToken";
+import { useEnsureSpotifyToken } from "../hooks/useEnsureSpotifyToken";
 
 export default function ProtectedRoute() {
   // Récupère l’utilisateur Supabase (null si non connecté)
   const { user } = useAuth();
 
   // Assure que le token Spotify est toujours valide et rafraîchi si nécessaire
-  useEnsureSpotifyTokens();
+  useEnsureSpotifyToken();
 
   // Mémoire de la route demandée pour redirection après login éventuel
   const location = useLocation();

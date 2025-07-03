@@ -1,59 +1,52 @@
-import { useEffect, useRef } from "react";
+// src/hooks/useEnsureSpotifyToken.ts
+
+import { useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import { refreshSpotifyToken } from "../services/spotifyTokenService";
 import { useSpotifyToken } from "../contexts/SpotifyTokenContext";
 
 /**
- * Hook centralisé pour toujours disposer d’un access_token Spotify valide.
- * - Récupère provider_token et provider_refresh_token depuis Supabase.
- * - Rafraîchit automatiquement l’access_token via le backend sécurisé si nécessaire.
- * - Met à jour le contexte global via setAccessToken().
+ * Hook global pour garantir un access_token Spotify valide.
+ * - Utilise provider_token et provider_refresh_token de la session Supabase.
+ * - Stocke le token dans le context global.
+ * - Loggue toutes les infos utiles pour le debug.
+ * - Ne gère pas le refresh automatique ici, voir si tu veux l’ajouter plus tard.
  */
-export function useEnsureSpotifyTokens() {
+export function useEnsureSpotifyToken() {
   const { setAccessToken } = useSpotifyToken();
-  const refreshTimeout = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
-    let mounted = true;
-
-    async function initializeAndScheduleRefresh() {
+    async function checkAndRefresh() {
       // 1. Récupère la session Supabase
       const { data: { session } } = await supabase.auth.getSession();
-      const providerToken = session?.provider_token;
-      const refreshToken  = session?.provider_refresh_token;
+      console.log("useEnsureSpotifyToken session récupérée :", session);
 
-      if (!providerToken || !refreshToken) {
+      if (!session) {
         setAccessToken(null);
+        console.log("useEnsureSpotifyToken Pas de session Supabase");
         return;
       }
 
-      // 2. Met à jour immédiatement le contexte avec le token actuel
-      setAccessToken(providerToken);
+      // 2. Récupère les vrais tokens Spotify
+      let accessToken = session.provider_token;
+      const refreshToken = session.provider_refresh_token;
+      console.log("useEnsureSpotifyToken accessToken provider_token :", accessToken);
+      console.log("useEnsureSpotifyToken refreshToken provider_refresh_token :", refreshToken);
 
-      // 3. Programme un rafraîchissement automatique 55 minutes plus tard
-      const timeout = setTimeout(async () => {
-        try {
-          const data = await refreshSpotifyToken(refreshToken);
-          if (mounted) {
-            setAccessToken(data.access_token);
-            // Re-planifier le prochain refresh avant expiration
-            const nextDelay = (data.expires_in - 60) * 1000;
-            refreshTimeout.current = setTimeout(initializeAndScheduleRefresh, nextDelay);
-          }
-        } catch (err) {
-          console.error("Erreur de rafraîchissement Spotify :", err);
-          if (mounted) setAccessToken(null);
-        }
-      }, 55 * 60 * 1000);
+      if (!accessToken || !refreshToken) {
+        setAccessToken(null);
+        console.log("useEnsureSpotifyToken Pas de token Spotify dans la session");
+        return;
+      }
 
-      refreshTimeout.current = timeout;
+      // 3. (Optionnel) Ajoute ici la logique d'expiration si tu as expires_at
+      //    Par défaut, on suppose que le token est valide à la connexion
+      //    Tu peux ajouter un refresh auto ici plus tard si tu veux
+
+      setAccessToken(accessToken);
+      console.log("useEnsureSpotifyToken Token Spotify mis à jour dans le context :", accessToken);
     }
 
-    initializeAndScheduleRefresh();
-
-    return () => {
-      mounted = false;
-      if (refreshTimeout.current) clearTimeout(refreshTimeout.current);
-    };
+    checkAndRefresh();
   }, [setAccessToken]);
 }
