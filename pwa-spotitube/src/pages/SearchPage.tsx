@@ -1,120 +1,258 @@
-import React, { useState } from "react";
-import { useSpotifyToken } from "../contexts/SpotifyTokenContext";
-import axios from "axios";
+import React, { useEffect, useState } from "react";
+import SearchBar from "../components/SearchBar";
+import { searchSpotify } from "../services/spotifyApi";
+import { searchYouTube } from "../services/youtubeApi";
+import { getUserPlaylists } from "../services/playlistService";
+import { addTrackToPlaylist } from "../services/playlistTracksService";
+import { supabase } from "../supabaseClient";
+import YouTubePlayer from "../components/YouTubePlayer";
 
-const YOUTUBE_API_KEY = process.env.REACT_APP_YOUTUBE_API_KEY;
+// Types
+type Artist = { name: string; id: string; url: string };
+type Album = { name: string; id: string; url: string };
+type Track = {
+  id: string;
+  title: string;
+  artists: Artist[];
+  album: Album;
+  albumArt: string;
+  source: "spotify";
+  spotifyUrl?: string;
+};
+type Playlist = { id: string; name: string };
+
+function removeDuplicates(tracks: Track[]): Track[] {
+  const seen = new Set();
+  return tracks.filter((track) => {
+    const key = track.title + track.artists.map((a) => a.name).join(",").toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 export default function SearchPage() {
-  const { accessToken } = useSpotifyToken();
-  const [query, setQuery] = useState("");
-  const [spotifyResults, setSpotifyResults] = useState<any[]>([]);
-  const [youtubeResults, setYoutubeResults] = useState<any[]>([]);
+  const [results, setResults] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
+  const [youtubeVideoId, setYoutubeVideoId] = useState<string | null>(null);
+  const [isLoadingYoutube, setIsLoadingYoutube] = useState(false);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [showPlaylistSelect, setShowPlaylistSelect] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    if (!query) return;
+  // Récupère les playlists utilisateur
+  useEffect(() => {
+    const fetchPlaylists = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const pls = await getUserPlaylists(user.id);
+        setPlaylists(pls);
+      }
+    };
+    fetchPlaylists();
+  }, []);
+
+  // Recherche Spotify uniquement, sans doublons
+  const handleSearch = async (query: string) => {
     setLoading(true);
-
-    // Recherche Spotify
-    let spotifyTracks: any[] = [];
-    if (accessToken) {
-      try {
-        const res = await fetch(
-          `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=8`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        const data = await res.json();
-        if (data.error) throw new Error(data.error.message);
-        spotifyTracks = data.tracks?.items || [];
-      } catch (err: any) {
-        setError("Erreur Spotify : " + (err.message || "Inconnue"));
+    setError(null);
+    setResults([]);
+    setSelectedTrack(null);
+    setYoutubeVideoId(null);
+    setShowPlaylistSelect(null);
+    try {
+      // Récupère le token Spotify de l'utilisateur connecté
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken =
+        session?.provider_token ||
+        session?.user?.identities?.[0]?.identity_data?.access_token;
+      let spotifyResults: Track[] = [];
+      if (accessToken) {
+        spotifyResults = await searchSpotify(query, accessToken);
+        spotifyResults = removeDuplicates(spotifyResults);
       }
-    } else {
-      setError("Token Spotify manquant ou expiré.");
+      setResults(spotifyResults);
+    } catch (err: any) {
+      setError("Erreur lors de la recherche.");
+      console.error(err);
     }
-
-    // Recherche YouTube
-    let youtubeTracks: any[] = [];
-    if (YOUTUBE_API_KEY) {
-      try {
-        const res = await axios.get<{ items: any[] }>(
-          `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=8&q=${encodeURIComponent(query)}&key=${YOUTUBE_API_KEY}`
-        );
-        youtubeTracks = res.data.items;
-      } catch (err: any) {
-        setError("Erreur YouTube : " + (err.message || "Inconnue"));
-      }
-    } else {
-      setError("Clé API YouTube manquante.");
-    }
-
-    setSpotifyResults(spotifyTracks);
-    setYoutubeResults(youtubeTracks);
     setLoading(false);
   };
 
+  // Quand on clique sur un morceau, cherche la meilleure vidéo YouTube et affiche le player
+  const handlePlay = async (track: Track) => {
+    setSelectedTrack(track);
+    setIsLoadingYoutube(true);
+    setYoutubeVideoId(null);
+    const ytResults = await searchYouTube(
+      `${track.artists.map((a) => a.name).join(" ")} ${track.title} official audio`
+    );
+    setIsLoadingYoutube(false);
+    if (ytResults.length > 0) {
+      setYoutubeVideoId(ytResults[0].youtubeId);
+    } else {
+      setYoutubeVideoId(null);
+      alert("Aucune vidéo YouTube trouvée pour ce morceau.");
+    }
+  };
+
+  // Ajout à une playlist (correction ici !)
+  const handleAddToPlaylist = async (track: Track, playlistId: string) => {
+    try {
+      await addTrackToPlaylist({
+        playlist_id: playlistId, // <-- nom exact attendu par le service
+        title: track.title,
+        artist: track.artists.map((a) => a.name).join(", "),
+        source: "spotify",
+        source_id: track.id,     // <-- nom exact attendu par le service
+        album: track.album.name,
+        album_art: track.albumArt,
+      });
+      setSuccessMsg("Morceau ajouté à la playlist !");
+    } catch (err: any) {
+      alert("Erreur lors de l'ajout : " + err.message);
+    }
+    setShowPlaylistSelect(null);
+    setTimeout(() => setSuccessMsg(null), 2000);
+  };
+
   return (
-    <div style={{ maxWidth: 900, margin: "40px auto" }}>
-      <h2>Recherche musicale</h2>
-      <form onSubmit={handleSearch} style={{ display: "flex", gap: 12, marginBottom: 24 }}>
-        <input
-          type="text"
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="Titre, artiste, album…"
-          style={{ flex: 1, padding: 12, borderRadius: 8, border: "1px solid #ccc" }}
-        />
-        <button type="submit" style={{
-          background: "#1DB954", color: "#fff", border: "none", borderRadius: 8, padding: "0 20px", fontWeight: 600
-        }}>
-          Chercher
-        </button>
-      </form>
-      {loading && <div>Chargement…</div>}
-      {error && <div style={{ color: "red", marginBottom: 16 }}>{error}</div>}
-      <div style={{ display: "flex", gap: 32 }}>
-        {/* Résultats Spotify */}
-        <div style={{ flex: 1 }}>
-          <h3>Spotify</h3>
-          <ul style={{ listStyle: "none", padding: 0 }}>
-            {spotifyResults.map(track => (
-              <li key={track.id} style={{
-                background: "#191414", color: "#fff", borderRadius: 8, padding: 12, marginBottom: 10, display: "flex", alignItems: "center", gap: 10
+    <div style={{ maxWidth: 700, margin: "60px auto", padding: 20 }}>
+      <h1>Recherche musicale</h1>
+      <SearchBar onSearch={handleSearch} />
+      {loading && <p>Chargement…</p>}
+      {error && <p style={{ color: "red" }}>{error}</p>}
+      <div style={{ display: "grid", gap: 24 }}>
+        {results.map((result) => (
+          <div
+            key={result.id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              background: "#191414",
+              borderRadius: 12,
+              padding: 16,
+              gap: 16,
+              position: "relative",
+            }}
+          >
+            {result.albumArt && (
+              <img
+                src={result.albumArt}
+                alt={result.title}
+                style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover" }}
+              />
+            )}
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, color: "#fff" }}>{result.title}</div>
+              <div style={{ color: "#b3b3b3", fontSize: 14 }}>
+                {result.artists.map((artist, idx) => (
+                  <span key={artist.id}>
+                    <a
+                      href={artist.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "#1DB954", textDecoration: "underline", marginRight: 4 }}
+                    >
+                      {artist.name}
+                    </a>
+                    {idx < result.artists.length - 1 ? ", " : ""}
+                  </span>
+                ))}
+              </div>
+              <div style={{ color: "#b3b3b3", fontSize: 13, marginTop: 4 }}>
+                Album{" "}
+                <a
+                  href={result.album.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#1DB954", textDecoration: "underline" }}
+                >
+                  {result.album.name}
+                </a>
+              </div>
+            </div>
+            <button
+              onClick={() => handlePlay(result)}
+              style={{
+                background: "#FF0000",
+                color: "#fff",
+                border: "none",
+                borderRadius: 16,
+                padding: "8px 16px",
+                fontWeight: 600,
+                marginRight: 8,
+                cursor: "pointer",
+              }}
+            >
+              Lire sur YouTube
+            </button>
+            <button
+              onClick={() => setShowPlaylistSelect(result.id)}
+              style={{
+                background: "#1DB954",
+                color: "#fff",
+                border: "none",
+                borderRadius: 16,
+                padding: "8px 16px",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Ajouter à une playlist
+            </button>
+            {showPlaylistSelect === result.id && (
+              <div style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                background: "#222",
+                padding: 12,
+                borderRadius: 8,
+                marginTop: 8,
+                zIndex: 2,
               }}>
-                {track.album?.images?.[0]?.url && (
-                  <img src={track.album.images[0].url} alt={track.name} style={{ width: 40, height: 40, borderRadius: 6 }} />
-                )}
-                <div>
-                  <div style={{ fontWeight: 600 }}>{track.name}</div>
-                  <div style={{ color: "#b3b3b3", fontSize: 13 }}>{track.artists.map((a: any) => a.name).join(", ")}</div>
-                </div>
-                {/* Prépare ici un bouton "Ajouter à playlist" */}
-              </li>
-            ))}
-          </ul>
-        </div>
-        {/* Résultats YouTube */}
-        <div style={{ flex: 1 }}>
-          <h3>YouTube</h3>
-          <ul style={{ listStyle: "none", padding: 0 }}>
-            {youtubeResults.map(video => (
-              <li key={video.id.videoId} style={{
-                background: "#222", color: "#fff", borderRadius: 8, padding: 12, marginBottom: 10, display: "flex", alignItems: "center", gap: 10
-              }}>
-                <img src={video.snippet.thumbnails.default.url} alt={video.snippet.title} style={{ width: 40, height: 40, borderRadius: 6 }} />
-                <div>
-                  <div style={{ fontWeight: 600 }}>{video.snippet.title}</div>
-                  <div style={{ color: "#b3b3b3", fontSize: 13 }}>{video.snippet.channelTitle}</div>
-                </div>
-                {/* Prépare ici un bouton "Ajouter à playlist" */}
-              </li>
-            ))}
-          </ul>
-        </div>
+                <select
+                  defaultValue=""
+                  onChange={e => {
+                    if (e.target.value) handleAddToPlaylist(result, e.target.value);
+                  }}
+                  style={{ padding: 8, borderRadius: 8 }}
+                >
+                  <option value="" disabled>Choisir une playlist</option>
+                  {playlists.map(pl => (
+                    <option key={pl.id} value={pl.id}>{pl.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
+      {successMsg && (
+        <div style={{
+          background: "#1DB954",
+          color: "#fff",
+          textAlign: "center",
+          margin: "20px 0",
+          borderRadius: 8,
+          padding: 12,
+        }}>
+          {successMsg}
+        </div>
+      )}
+      {isLoadingYoutube && (
+        <div style={{ textAlign: "center", margin: "20px 0", color: "#1DB954" }}>
+          Chargement de la vidéo YouTube…
+        </div>
+      )}
+      {youtubeVideoId && !isLoadingYoutube && (
+        <div style={{ textAlign: "center", margin: "20px 0" }}>
+          <YouTubePlayer videoId={youtubeVideoId} />
+        </div>
+      )}
     </div>
   );
 }
