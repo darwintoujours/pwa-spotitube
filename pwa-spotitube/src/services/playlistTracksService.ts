@@ -1,28 +1,26 @@
-import { supabase } from '../supabaseClient';
+import { supabase } from "../supabaseClient";
 
 // Ajouter un morceau à une playlist
 export async function addTrackToPlaylist({
-  playlist_id,
+  playlistid,
   title,
   artist,
   source,
-  source_id,
+  sourceid,
   album,
-  album_art,
+  albumart,
 }: {
-  playlist_id: string;
+  playlistid: string;
   title: string;
   artist: string;
-  source: string;      // 'spotify' ou 'youtube'
-  source_id: string;   // id Spotify ou id YouTube
+  source: string; // "spotify" ou "youtube"
+  sourceid: string; // id Spotify ou id YouTube
   album?: string;
-  album_art?: string;
+  albumart?: string;
 }) {
   const { data, error } = await supabase
-    .from('playlist_tracks')
-    .insert([
-      { playlist_id, title, artist, source, source_id, album, album_art }
-    ])
+    .from("playlisttracks")
+    .insert({ playlistid, title, artist, source, sourceid, album, albumart })
     .select()
     .single();
   if (error) throw error;
@@ -30,30 +28,30 @@ export async function addTrackToPlaylist({
 }
 
 // Récupérer tous les morceaux d'une playlist
-export async function getTracksForPlaylist(playlist_id: string) {
+export async function getTracksForPlaylist(playlistid: string) {
   const { data, error } = await supabase
-    .from('playlist_tracks')
-    .select('*')
-    .eq('playlist_id', playlist_id)
-    .order('added_at', { ascending: true });
+    .from("playlisttracks")
+    .select()
+    .eq("playlistid", playlistid)
+    .order("position", { ascending: true }); // ou "addedat"
   if (error) throw error;
   return data;
 }
 
 // Supprimer un morceau d'une playlist
-export async function deleteTrackFromPlaylist(track_id: string) {
+export async function deleteTrackFromPlaylist(trackid: string) {
   const { error } = await supabase
-    .from('playlist_tracks')
+    .from("playlisttracks")
     .delete()
-    .eq('id', track_id);
+    .eq("id", trackid);
   if (error) throw error;
 }
 
-// Dans src/services/playlistTracksService.ts
-export async function updateTrackPosition(track_id: string, position: number) {
+// Mettre à jour la position d'un morceau (pour drag & drop)
+export async function updateTrackPosition(trackid: string, position: number) {
   const { error } = await supabase
-    .from('playlist_tracks')
+    .from("playlisttracks")
     .update({ position })
-    .eq('id', track_id);
+    .eq("id", trackid);
   if (error) throw error;
 }

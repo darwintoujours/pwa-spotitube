@@ -1,24 +1,17 @@
-import React from 'react';
-import YouTube from 'react-youtube';
+import React from "react";
 
-type YouTubePlayerProps = {
-  videoId: string;
-};
-
-export default function YouTubePlayer({ videoId }: YouTubePlayerProps) {
-  const opts = {
-    height: '200',
-    width: '350',
-    playerVars: {
-      autoplay: 1,
-      controls: 1,
-      modestbranding: 1,
-      rel: 0,
-    },
-  };
+export default function YouTubePlayer({ videoId }: { videoId: string }) {
+  if (!videoId) return null;
   return (
-    <div style={{ margin: '24px auto', textAlign: 'center' }}>
-      <YouTube videoId={videoId} opts={opts} />
-    </div>
+    <iframe
+      width="360"
+      height="202"
+      src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+      title="YouTube player"
+      frameBorder="0"
+      allow="autoplay; encrypted-media"
+      allowFullScreen
+      style={{ borderRadius: 12 }}
+    />
   );
 }

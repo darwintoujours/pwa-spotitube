@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
+import { usePlayer } from "../contexts/PlayerContext";
 
 type Playlist = {
   id: string;

@@ -1,14 +1,16 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 
-type Track = {
+// Type d’un morceau
+export type Track = {
   id: string;
   title: string;
   artist: string;
-  source: 'spotify' | 'youtube';
-  source_id?: string;
   albumArt?: string;
+  source: "spotify" | "youtube";
+  sourceid?: string; // ID YouTube si source YouTube
 };
 
+// Type du contexte
 type PlayerContextType = {
   queue: Track[];
   currentIndex: number;
@@ -31,31 +33,53 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isPlaying, setIsPlaying] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
 
-  const setQueue = useCallback((tracks: Track[], startIndex = 0) => {
+  // Met à jour la file d’attente et lance la lecture à partir d’un index donné (par défaut 0)
+  const setQueue = useCallback((tracks: Track[], startIndex: number = 0) => {
     setQueueState(tracks);
     setCurrentIndex(startIndex);
     setIsPlaying(true);
   }, []);
 
-  const play = () => setIsPlaying(true);
-  const pause = () => setIsPlaying(false);
-  const next = () => setCurrentIndex(i => (i < queue.length - 1 ? i + 1 : i));
-  const prev = () => setCurrentIndex(i => (i > 0 ? i - 1 : i));
-  const playAt = (idx: number) => setCurrentIndex(idx);
-  const toggleVideo = () => setShowVideo(v => !v);
+  const play = useCallback(() => setIsPlaying(true), []);
+  const pause = useCallback(() => setIsPlaying(false), []);
+  const next = useCallback(() => {
+    setCurrentIndex(i => (i < queue.length - 1 ? i + 1 : i));
+    setIsPlaying(true);
+  }, [queue.length]);
+  const prev = useCallback(() => {
+    setCurrentIndex(i => (i > 0 ? i - 1 : i));
+    setIsPlaying(true);
+  }, []);
+  const playAt = useCallback((idx: number) => {
+    setCurrentIndex(idx);
+    setIsPlaying(true);
+  }, []);
+  const toggleVideo = useCallback(() => setShowVideo(v => !v), []);
 
   return (
-    <PlayerContext.Provider value={{
-      queue, currentIndex, isPlaying, showVideo,
-      setQueue, play, pause, next, prev, playAt, toggleVideo
-    }}>
+    <PlayerContext.Provider
+      value={{
+        queue,
+        currentIndex,
+        isPlaying,
+        showVideo,
+        setQueue,
+        play,
+        pause,
+        next,
+        prev,
+        playAt,
+        toggleVideo,
+      }}
+    >
       {children}
     </PlayerContext.Provider>
   );
 };
 
-export const usePlayer = () => {
+// Hook pour utiliser le player partout
+export function usePlayer() {
   const ctx = useContext(PlayerContext);
   if (!ctx) throw new Error("usePlayer must be used within PlayerProvider");
   return ctx;
-};
+}

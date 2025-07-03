@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useSpotifyToken } from "../contexts/SpotifyTokenContext";
+import { usePlayer } from "../contexts/PlayerContext";
 
 type SpotifyProfile = {
   display_name: string;
